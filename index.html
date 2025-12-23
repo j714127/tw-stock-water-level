@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>台股智慧水位系統 v3.0</title>
+    <title>台股智慧水位系統 v4.0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
         * { box-sizing: border-box; }
         body { 
@@ -69,8 +68,6 @@
         .signal.buy { background: #d4edda; color: #155724; }
         .signal.sell { background: #f8d7da; color: #721c24; }
         .signal.hold { background: #fff3cd; color: #856404; }
-        
-        /* 資金管理區塊 */
         .portfolio-section {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white; padding: 30px; border-radius: 20px; margin: 30px 0;
@@ -100,7 +97,6 @@
         .positive { color: #28a745; }
         .negative { color: #dc3545; }
         .neutral { color: #007bff; }
-        
         .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; margin: 40px 0; }
         .chart-container { 
             background: white; border-radius: 15px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
@@ -114,7 +110,6 @@
         th { background: #667eea; color: white; padding: 15px; text-align: center; font-weight: 600; }
         td { padding: 12px; text-align: center; border-bottom: 1px solid #eee; }
         tr:hover { background: #f8f9ff; }
-        
         @media (max-width: 768px) {
             .charts-row, .portfolio-grid { grid-template-columns: 1fr; }
             .metrics-grid { grid-template-columns: repeat(2, 1fr); }
@@ -125,45 +120,43 @@
 <body>
     <div class="dashboard">
         <div class="header">
-            <h1>📈 台股智慧水位系統 v3.0</h1>
-            <p>即時整合5大指標 • 精準資金配置建議 • 一鍵查詢最新數據</p>
+            <h1>📈 台股智慧水位系統 v4.0</h1>
+            <p>即時整合5大指標 • 精準資金配置建議 • 自動記憶最後一次設定</p>
         </div>
 
         <div class="controls">
-            <button class="btn" onclick="fetchRealTimeData()">🔄 即時更新數據</button>
+            <button class="btn" onclick="fetchRealTimeData()">🔄 即時更新數據（模擬）</button>
             <label class="upload-zone btn" for="excelUpload">
                 📁 匯入Excel歷史數據
                 <input type="file" id="excelUpload" accept=".xlsx,.xls" style="display: none;" onchange="loadExcelData(event)">
             </label>
-            <button class="btn" onclick="exportData()">💾 匯出報告</button>
+            <button class="btn" onclick="exportData()">💾 匯出歷史紀錄</button>
         </div>
 
         <div class="metrics-grid" id="metricsGrid"></div>
 
         <div id="total-score">
-    <div style="font-size: 1.4em; margin-bottom: 10px;">綜合評分</div>
-    <div class="water-gauge" id="totalScore">--</div>
-    <div style="font-size: 1.2em; margin-top: 10px;">建議持股水位</div>
-    <div id="signal" class="signal">等待計算...</div>
-    <button class="btn" style="margin-top:15px;" onclick="commitCurrentSnapshot()">
-        ✅ 開始計算建議的資金水位
-    </button>
-</div>
+            <div style="font-size: 1.4em; margin-bottom: 10px;">綜合評分</div>
+            <div class="water-gauge" id="totalScore">--</div>
+            <div style="font-size: 1.2em; margin-top: 10px;">建議持股水位</div>
+            <div id="signal" class="signal">等待計算...</div>
+            <button class="btn" style="margin-top:15px;" onclick="commitCurrentSnapshot()">
+                ✅ 開始計算建議的資金水位（並記錄）
+            </button>
+        </div>
 
-
-        <!-- 新增資金管理區塊 -->
         <div class="portfolio-section">
             <h3 style="margin-top: 0; text-align: center;">💰 資金配置管理</h3>
             <div class="portfolio-grid">
                 <div class="portfolio-item">
                     <div class="portfolio-label">目前持股總市值</div>
                     <div class="portfolio-value" id="currentStockValue">NT$ 1,000,000</div>
-                    <input type="number" id="stockInput" value="1000000" class="portfolio-input" onchange="updatePortfolio()">
+                    <input type="number" id="stockInput" value="1000000" class="portfolio-input" onchange="updatePortfolio();saveToStorage();">
                 </div>
                 <div class="portfolio-item">
                     <div class="portfolio-label">現金餘額</div>
                     <div class="portfolio-value" id="cashBalance">NT$ 500,000</div>
-                    <input type="number" id="cashInput" value="500000" class="portfolio-input" onchange="updatePortfolio()">
+                    <input type="number" id="cashInput" value="500000" class="portfolio-input" onchange="updatePortfolio();saveToStorage();">
                 </div>
                 <div class="portfolio-item">
                     <div class="portfolio-label">目前水位</div>
@@ -207,267 +200,321 @@
         </div>
     </div>
 
-<script>
-    const DATA_LINKS = {
-        fearGreed: { name: 'CNN恐懼指數', url: 'https://www.cnn.com/markets/fear-and-greed' },
-        vixTwn: { name: '台灣VIX', url: 'https://www.macromicro.me/charts/46328/tw-vixtwn' },
-        rsi: { name: '台指RSI(14)', url: 'https://hk.investing.com/indices/taiwan-weighted-technical' },
-        usdTwd: { name: 'USD/TWD', url: 'https://www.xe.com/currencyconverter/convert/?Amount=1&From=USD&To=TWD' },
-        fed: { name: 'FED政策', url: 'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html' }
-    };
+    <script>
+        const STORAGE_KEY = 'tw_stock_water_level_v1';
 
-    const SCORING_SYSTEM = {
-        fearGreed: { name: 'CNN恐懼指數', weight: 0.40, thresholds: [[0,24,100],[25,44,80],[45,55,50],[56,74,20],[75,100,0]] },
-        vixTwn: { name: '台灣VIX', weight: 0.20, thresholds: [[0,25,100],[25,35,50],[35,Infinity,20]] },
-        rsi: { name: '台指RSI(14)', weight: 0.15, thresholds: [[0,30,100],[30,70,50],[70,100,20]] },
-        usdTwd: { name: 'USD/TWD匯率', weight: 0.20, thresholds: [[33,Infinity,100],[31,33,50],[0,31,20]] },
-        fed: { name: 'FED政策', weight: 0.05, thresholds: [[0,2.5,100],[2.5,4.5,50],[4.5,Infinity,20]] }
-    };
-
-    let historyData = [];
-    let currentValues = {};
-    let charts = {};
-    let totalScore = 0;
-    let stockValue = 1000000;
-    let cashValue = 500000;
-
-    document.addEventListener('DOMContentLoaded', initDashboard);
-
-    function initDashboard() {
-        createMetricsGrid();
-        initCharts();
-        loadDefaultData();
-        updatePortfolio();
-    }
-
-    function createMetricsGrid() {
-        const grid = document.getElementById('metricsGrid');
-        Object.entries(SCORING_SYSTEM).forEach(([key, metric]) => {
-            const card = document.createElement('div');
-            card.className = 'metric-card';
-            card.innerHTML = `
-                <div class="metric-header">${metric.name}</div>
-                <div class="metric-value" id="value-${key}">50</div>
-                <div class="metric-score" id="score-${key}">50</div>
-                <input type="number" id="input-${key}" min="0" max="100" step="0.1" class="metric-input">
-                <div class="metric-link">
-                    <a href="${DATA_LINKS[key].url}" target="_blank" class="data-link">🔗 查詢最新數據</a>
-                </div>
-            `;
-            grid.appendChild(card);
-            document.getElementById(`input-${key}`).addEventListener('input', recalculate);
-        });
-    }
-
-    function scoreIndicator(value, thresholds) {
-        for (const [min, max, score] of thresholds) {
-            if (value >= min && (max === Infinity || value <= max)) return score;
-        }
-        return 50;
-    }
-
-    // 只更新畫面與目前狀態，不寫入歷史
-    function recalculate() {
-        let weightedScore = 0;
-        const contributions = {};
-
-        Object.entries(SCORING_SYSTEM).forEach(([key, metric]) => {
-            const value = parseFloat(document.getElementById(`input-${key}`).value) || 50;
-            const score = scoreIndicator(value, metric.thresholds);
-            
-            document.getElementById(`value-${key}`).textContent = value.toFixed(1);
-            document.getElementById(`score-${key}`).textContent = score;
-            
-            weightedScore += score * metric.weight;
-            contributions[key] = score * metric.weight;
-            currentValues[key] = value;
-        });
-
-        totalScore = Math.round(weightedScore * 10) / 10;
-        updateDisplay(totalScore);
-        updateContributionChart(contributions);
-        updatePortfolio();
-    }
-
-    // 按下「開始計算建議的資金水位」時才寫一筆歷史資料
-    function commitCurrentSnapshot() {
-        if (!totalScore) recalculate();
-        addToHistory();
-        alert('✅ 已記錄一筆建議水位到歷史紀錄');
-    }
-
-    function updateDisplay(score) {
-        document.getElementById('totalScore').textContent = score.toFixed(1);
-        document.getElementById('idealWaterLevel').textContent = Math.round(score) + '%';
-
-        const signal = document.getElementById('signal');
-        let signalClass, message;
-        if (score >= 80) { signalClass = 'buy'; message = '🚀 大幅加碼！全倉ETF'; }
-        else if (score >= 60) { signalClass = 'buy'; message = '📈 小幅加碼'; }
-        else if (score >= 40) { signalClass = 'hold'; message = '⏸️ 維持觀望'; }
-        else if (score >= 20) { signalClass = 'sell'; message = '💰 減持現金'; }
-        else { signalClass = 'sell'; message = '🛡️ 清倉避險！'; }
-        
-        signal.textContent = message;
-        signal.className = `signal ${signalClass}`;
-    }
-
-    function updatePortfolio() {
-        stockValue = parseFloat(document.getElementById('stockInput').value) || 0;
-        cashValue = parseFloat(document.getElementById('cashInput').value) || 0;
-        
-        const totalAssets = stockValue + cashValue;
-        const currentWaterLevel = totalAssets > 0 ? (stockValue / totalAssets * 100) : 0;
-        const idealWaterLevel = totalScore;
-        const idealStockValue = totalAssets * (idealWaterLevel / 100);
-        const adjustmentAmount = idealStockValue - stockValue;
-        
-        document.getElementById('currentStockValue').textContent = `NT$ ${stockValue.toLocaleString()}`;
-        document.getElementById('cashBalance').textContent = `NT$ ${cashValue.toLocaleString()}`;
-        document.getElementById('currentWaterLevel').textContent = `${currentWaterLevel.toFixed(1)}%`;
-        
-        const absAdjustment = Math.abs(adjustmentAmount);
-        document.getElementById('adjustmentAmount').textContent = `NT$ ${absAdjustment.toLocaleString()}`;
-        
-        let directionClass, directionText;
-        if (adjustmentAmount > 10000) {
-            directionClass = 'positive';
-            directionText = `📈 建議加碼 ${absAdjustment.toLocaleString()} 元`;
-        } else if (adjustmentAmount < -10000) {
-            directionClass = 'negative';
-            directionText = `💰 建議減碼 ${absAdjustment.toLocaleString()} 元`;
-        } else {
-            directionClass = 'neutral';
-            directionText = '✅ 目前水位適當，無需調整';
-        }
-        
-        document.getElementById('adjustmentDirection').textContent = directionText;
-        document.getElementById('adjustmentDirection').className = directionClass;
-        document.getElementById('adjustmentAmount').className = directionClass;
-    }
-
-    function initCharts() {
-        const waterCtx = document.getElementById('waterLevelChart').getContext('2d');
-        charts.water = new Chart(waterCtx, {
-            type: 'line',
-            data: { 
-                labels: [],
-                datasets: [{ 
-                    label: '建議水位', 
-                    data: [], 
-                    borderColor: '#4facfe', 
-                    backgroundColor: 'rgba(79, 172, 254, 0.1)', 
-                    tension: 0.4, 
-                    fill: true 
-                }] 
-            },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100 } } }
-        });
-
-        const contribCtx = document.getElementById('contributionChart').getContext('2d');
-        charts.contrib = new Chart(contribCtx, {
-            type: 'doughnut',
-            data: { 
-                labels: Object.keys(SCORING_SYSTEM).map(k => SCORING_SYSTEM[k].name),
-                datasets: [{ data: [0,0,0,0,0], backgroundColor: ['#ff6384', '#36a2eb', '#ffcd56', '#4bc0c0', '#9966ff'] }] 
-            },
-            options: { responsive: true, maintainAspectRatio: false }
-        });
-    }
-
-    function updateContributionChart(contributions) {
-        if (!charts.contrib) return;
-        charts.contrib.data.datasets[0].data = Object.values(contributions);
-        charts.contrib.update('none');
-    }
-
-    function addToHistory() {
-        const record = { 
-            日期: new Date().toLocaleString('zh-TW'), 
-            ...currentValues, 
-            '綜合分數': totalScore, 
-            '建議水位': Math.round(totalScore) + '%' 
+        const DATA_LINKS = {
+            fearGreed: { name: 'CNN恐懼指數', url: 'https://www.cnn.com/markets/fear-and-greed' },
+            vixTwn:   { name: '台灣VIX', url: 'https://www.macromicro.me/charts/46328/tw-vixtwn' },
+            rsi:      { name: '台指RSI(14)', url: 'https://hk.investing.com/indices/taiwan-weighted-technical' },
+            usdTwd:   { name: 'USD/TWD', url: 'https://www.xe.com/currencyconverter/convert/?Amount=1&From=USD&To=TWD' },
+            fed:      { name: 'FED政策', url: 'https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html' }
         };
-        historyData.unshift(record);
-        if (historyData.length > 100) historyData = historyData.slice(0, 100);
-        
-        updateWaterLevelChart();
-        updateHistoryTable();
-    }
 
-    function updateWaterLevelChart() {
-        if (!charts.water || historyData.length === 0) return;
-        const recent = historyData.slice(0, 20);
-        charts.water.data.labels = recent.map((_, i) => `T-${20-i}`);
-        charts.water.data.datasets[0].data = recent.map(d => d['綜合分數']);
-        charts.water.update('none');
-    }
-
-    function updateHistoryTable() {
-        const tbody = document.querySelector('#historyTable tbody');
-        if (!tbody) return;
-        tbody.innerHTML = historyData.slice(0, 10).map(row => `
-            <tr>
-                <td>${row.日期 || 'N/A'}</td>
-                <td>${row.fearGreed?.toFixed(1) || ''}</td>
-                <td>${row.vixTwn?.toFixed(1) || ''}</td>
-                <td>${row.rsi?.toFixed(1) || ''}</td>
-                <td>${row.usdTwd?.toFixed(2) || ''}</td>
-                <td>${row.fed?.toFixed(1) || ''}</td>
-                <td><strong>${row['綜合分數']?.toFixed(1) || ''}</strong></td>
-                <td>${row['建議水位'] || ''}</td>
-            </tr>
-        `).join('');
-    }
-
-    async function fetchRealTimeData() {
-        const mockData = {
-            fearGreed: 45 + Math.random() * 30,
-            vixTwn: 18 + Math.random() * 25,
-            rsi: 35 + Math.random() * 45,
-            usdTwd: 31.8 + (Math.random() - 0.5) * 1.5,
-            fed: 3.75
+        const SCORING_SYSTEM = {
+            fearGreed: { name: 'CNN恐懼指數', weight: 0.40, thresholds: [[0,24,100],[25,44,80],[45,55,50],[56,74,20],[75,100,0]] },
+            vixTwn:    { name: '台灣VIX',      weight: 0.20, thresholds: [[0,25,100],[25,35,50],[35,Infinity,20]] },
+            rsi:       { name: '台指RSI(14)',  weight: 0.15, thresholds: [[0,30,100],[30,70,50],[70,100,20]] },
+            usdTwd:    { name: 'USD/TWD匯率', weight: 0.20, thresholds: [[33,Infinity,100],[31,33,50],[0,31,20]] },
+            fed:       { name: 'FED政策',      weight: 0.05, thresholds: [[0,2.5,100],[2.5,4.5,50],[4.5,Infinity,20]] }
         };
-        Object.entries(mockData).forEach(([key, value]) => {
-            document.getElementById(`input-${key}`).value = value.toFixed(2);
-        });
-        recalculate();
-    }
 
-    function loadDefaultData() {
-        Object.entries({ fearGreed: 43, vixTwn: 20.8, rsi: 50.8, usdTwd: 31.53, fed: 3.8 }).forEach(([key, val]) => {
-            document.getElementById(`input-${key}`).value = val;
-        });
-        recalculate();
-    }
+        let historyData = [];
+        let currentValues = {};
+        let charts = {};
+        let totalScore = 0;
+        let stockValue = 1000000;
+        let cashValue = 500000;
 
-    function exportData() {
-        if (historyData.length === 0) {
-            alert('無歷史數據可匯出');
-            return;
+        document.addEventListener('DOMContentLoaded', initDashboard);
+
+        function initDashboard() {
+            createMetricsGrid();
+            initCharts();
+            loadFromStorage();
+            if (historyData.length === 0) {
+                loadDefaultData();
+            } else {
+                recalculate();
+            }
+            updatePortfolio();
         }
-        const ws = XLSX.utils.json_to_sheet(historyData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, '水位分析報告');
-        XLSX.writeFile(wb, `台股水位報告_${new Date().toISOString().split('T')[0]}.xlsx`);
-    }
 
-    function loadExcelData(event) {
-        const file = event.target.files[0];
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            historyData = XLSX.utils.sheet_to_json(sheet);
+        function createMetricsGrid() {
+            const grid = document.getElementById('metricsGrid');
+            Object.entries(SCORING_SYSTEM).forEach(([key, metric]) => {
+                const card = document.createElement('div');
+                card.className = 'metric-card';
+                card.innerHTML = `
+                    <div class="metric-header">${metric.name}</div>
+                    <div class="metric-value" id="value-${key}">50</div>
+                    <div class="metric-score" id="score-${key}">50</div>
+                    <input type="number" id="input-${key}" min="0" max="100" step="0.1" class="metric-input">
+                    <div class="metric-link">
+                        <a href="${DATA_LINKS[key].url}" target="_blank" class="data-link">🔗 查詢最新數據</a>
+                    </div>
+                `;
+                grid.appendChild(card);
+                document.getElementById(`input-${key}`).addEventListener('input', recalculate);
+            });
+        }
+
+        function scoreIndicator(value, thresholds) {
+            for (const [min, max, score] of thresholds) {
+                if (value >= min && (max === Infinity || value <= max)) return score;
+            }
+            return 50;
+        }
+
+        function recalculate() {
+            let weightedScore = 0;
+            const contributions = {};
+
+            Object.entries(SCORING_SYSTEM).forEach(([key, metric]) => {
+                const value = parseFloat(document.getElementById(`input-${key}`).value) || 50;
+                const score = scoreIndicator(value, metric.thresholds);
+                
+                document.getElementById(`value-${key}`).textContent = value.toFixed(1);
+                document.getElementById(`score-${key}`).textContent = score;
+                
+                weightedScore += score * metric.weight;
+                contributions[key] = score * metric.weight;
+                currentValues[key] = value;
+            });
+
+            totalScore = Math.round(weightedScore * 10) / 10;
+            updateDisplay(totalScore);
+            updateContributionChart(contributions);
+            updatePortfolio();
+        }
+
+        function commitCurrentSnapshot() {
+            if (!totalScore) recalculate();
+            addToHistory();
+            saveToStorage();
+            alert('✅ 已記錄一筆建議水位到歷史紀錄（並保存在瀏覽器內）');
+        }
+
+        function updateDisplay(score) {
+            document.getElementById('totalScore').textContent = score.toFixed(1);
+            document.getElementById('idealWaterLevel').textContent = Math.round(score) + '%';
+
+            const signal = document.getElementById('signal');
+            let signalClass, message;
+            if (score >= 80) { signalClass = 'buy'; message = '🚀 大幅加碼！全倉ETF'; }
+            else if (score >= 60) { signalClass = 'buy'; message = '📈 小幅加碼'; }
+            else if (score >= 40) { signalClass = 'hold'; message = '⏸️ 維持觀望'; }
+            else if (score >= 20) { signalClass = 'sell'; message = '💰 減持現金'; }
+            else { signalClass = 'sell'; message = '🛡️ 清倉避險！'; }
+            
+            signal.textContent = message;
+            signal.className = `signal ${signalClass}`;
+        }
+
+        function updatePortfolio() {
+            stockValue = parseFloat(document.getElementById('stockInput').value) || 0;
+            cashValue  = parseFloat(document.getElementById('cashInput').value) || 0;
+            
+            const totalAssets = stockValue + cashValue;
+            const currentWaterLevel = totalAssets > 0 ? (stockValue / totalAssets * 100) : 0;
+            const idealWaterLevel   = totalScore;
+            const idealStockValue   = totalAssets * (idealWaterLevel / 100);
+            const adjustmentAmount  = idealStockValue - stockValue;
+            
+            document.getElementById('currentStockValue').textContent = `NT$ ${stockValue.toLocaleString()}`;
+            document.getElementById('cashBalance').textContent      = `NT$ ${cashValue.toLocaleString()}`;
+            document.getElementById('currentWaterLevel').textContent= `${currentWaterLevel.toFixed(1)}%`;
+            
+            const absAdjustment = Math.abs(adjustmentAmount);
+            document.getElementById('adjustmentAmount').textContent = `NT$ ${absAdjustment.toLocaleString()}`;
+            
+            let directionClass, directionText;
+            if (adjustmentAmount > 10000) {
+                directionClass = 'positive';
+                directionText = `📈 建議加碼 ${absAdjustment.toLocaleString()} 元`;
+            } else if (adjustmentAmount < -10000) {
+                directionClass = 'negative';
+                directionText = `💰 建議減碼 ${absAdjustment.toLocaleString()} 元`;
+            } else {
+                directionClass = 'neutral';
+                directionText = '✅ 目前水位適當，無需調整';
+            }
+            
+            document.getElementById('adjustmentDirection').textContent = directionText;
+            document.getElementById('adjustmentDirection').className   = directionClass;
+            document.getElementById('adjustmentAmount').className      = directionClass;
+        }
+
+        function initCharts() {
+            const waterCtx = document.getElementById('waterLevelChart').getContext('2d');
+            charts.water = new Chart(waterCtx, {
+                type: 'line',
+                data: { 
+                    labels: [],
+                    datasets: [{ 
+                        label: '建議水位', 
+                        data: [], 
+                        borderColor: '#4facfe', 
+                        backgroundColor: 'rgba(79, 172, 254, 0.1)', 
+                        tension: 0.4, 
+                        fill: true 
+                    }] 
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100 } } }
+            });
+
+            const contribCtx = document.getElementById('contributionChart').getContext('2d');
+            charts.contrib = new Chart(contribCtx, {
+                type: 'doughnut',
+                data: { 
+                    labels: Object.keys(SCORING_SYSTEM).map(k => SCORING_SYSTEM[k].name),
+                    datasets: [{ data: [0,0,0,0,0], backgroundColor: ['#ff6384', '#36a2eb', '#ffcd56', '#4bc0c0', '#9966ff'] }] 
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        function updateContributionChart(contributions) {
+            if (!charts.contrib) return;
+            charts.contrib.data.datasets[0].data = Object.values(contributions);
+            charts.contrib.update('none');
+        }
+
+        function addToHistory() {
+            const record = { 
+                日期: new Date().toLocaleString('zh-TW'), 
+                ...currentValues, 
+                '綜合分數': totalScore, 
+                '建議水位': Math.round(totalScore) + '%'
+            };
+            historyData.unshift(record);
+            if (historyData.length > 100) historyData = historyData.slice(0, 100);
+            
             updateWaterLevelChart();
             updateHistoryTable();
-            alert(`✅ 成功匯入 ${historyData.length} 筆歷史數據`);
-        };
-        reader.readAsArrayBuffer(file);
-    }
-</script>
+        }
 
+        function updateWaterLevelChart() {
+            if (!charts.water || historyData.length === 0) return;
+            const recent = historyData.slice(0, 20);
+            charts.water.data.labels = recent.map((_, i) => `T-${20-i}`);
+            charts.water.data.datasets[0].data = recent.map(d => d['綜合分數']);
+            charts.water.update('none');
+        }
 
+        function updateHistoryTable() {
+            const tbody = document.querySelector('#historyTable tbody');
+            if (!tbody) return;
+            tbody.innerHTML = historyData.slice(0, 10).map(row => `
+                <tr>
+                    <td>${row.日期 || 'N/A'}</td>
+                    <td>${row.fearGreed?.toFixed(1) || ''}</td>
+                    <td>${row.vixTwn?.toFixed(1) || ''}</td>
+                    <td>${row.rsi?.toFixed(1) || ''}</td>
+                    <td>${row.usdTwd?.toFixed(2) || ''}</td>
+                    <td>${row.fed?.toFixed(1) || ''}</td>
+                    <td><strong>${row['綜合分數']?.toFixed(1) || ''}</strong></td>
+                    <td>${row['建議水位'] || ''}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function fetchRealTimeData() {
+            const mockData = {
+                fearGreed: 45 + Math.random() * 30,
+                vixTwn: 18 + Math.random() * 25,
+                rsi: 35 + Math.random() * 45,
+                usdTwd: 31.8 + (Math.random() - 0.5) * 1.5,
+                fed: 3.75
+            };
+            Object.entries(mockData).forEach(([key, value]) => {
+                document.getElementById(`input-${key}`).value = value.toFixed(2);
+            });
+            recalculate();
+        }
+
+        function loadDefaultData() {
+            Object.entries({ fearGreed: 43, vixTwn: 20.8, rsi: 50.8, usdTwd: 31.53, fed: 3.8 }).forEach(([key, val]) => {
+                document.getElementById(`input-${key}`).value = val;
+            });
+            recalculate();
+        }
+
+        function exportData() {
+            if (historyData.length === 0) {
+                alert('無歷史數據可匯出');
+                return;
+            }
+            const ws = XLSX.utils.json_to_sheet(historyData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '水位分析報告');
+            XLSX.writeFile(wb, `台股水位報告_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+        function loadExcelData(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                historyData = XLSX.utils.sheet_to_json(sheet);
+                updateWaterLevelChart();
+                updateHistoryTable();
+                saveToStorage();
+                alert(`✅ 成功匯入 ${historyData.length} 筆歷史數據`);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 將目前狀態存到 localStorage
+        function saveToStorage() {
+            const payload = {
+                historyData,
+                currentValues,
+                totalScore,
+                stockValue: parseFloat(document.getElementById('stockInput').value) || 0,
+                cashValue:  parseFloat(document.getElementById('cashInput').value) || 0
+            };
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+            } catch (e) {
+                console.error('saveToStorage error', e);
+            }
+        }
+
+        // 從 localStorage 還原狀態
+        function loadFromStorage() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return;
+                const data = JSON.parse(raw);
+                if (!data) return;
+
+                historyData = Array.isArray(data.historyData) ? data.historyData : [];
+                currentValues = data.currentValues || {};
+
+                Object.entries(currentValues).forEach(([key, val]) => {
+                    const input = document.getElementById(`input-${key}`);
+                    if (input) input.value = val;
+                });
+
+                if (typeof data.stockValue === 'number') {
+                    document.getElementById('stockInput').value = data.stockValue;
+                }
+                if (typeof data.cashValue === 'number') {
+                    document.getElementById('cashInput').value = data.cashValue;
+                }
+                if (typeof data.totalScore === 'number') {
+                    totalScore = data.totalScore;
+                }
+
+                updateWaterLevelChart();
+                updateHistoryTable();
+            } catch (e) {
+                console.error('loadFromStorage error', e);
+            }
+        }
+    </script>
 </body>
 </html>
