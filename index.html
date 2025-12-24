@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>台股智慧水位系統 v4.0</title>
+    <title>台股智慧水位系統 v4.1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -120,7 +120,7 @@
 <body>
     <div class="dashboard">
         <div class="header">
-            <h1>📈 台股智慧水位系統 v4.0</h1>
+            <h1>📈 台股智慧水位系統 v4.1</h1>
             <p>即時整合5大指標 • 精準資金配置建議 • 自動記憶最後一次設定</p>
         </div>
 
@@ -191,8 +191,16 @@
             <table id="historyTable">
                 <thead>
                     <tr>
-                        <th>日期時間</th><th>恐懼指數</th><th>VIX</th><th>RSI</th>
-                        <th>匯率</th><th>FED</th><th>綜合分數</th><th>建議水位</th>
+                        <th>日期時間</th>
+                        <th>恐懼指數</th>
+                        <th>VIX</th>
+                        <th>RSI</th>
+                        <th>匯率</th>
+                        <th>FED</th>
+                        <th>綜合分數</th>
+                        <th>建議水位</th>
+                        <th>持股市值</th>
+                        <th>現金餘額</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -385,7 +393,9 @@
                 日期: new Date().toLocaleString('zh-TW'), 
                 ...currentValues, 
                 '綜合分數': totalScore, 
-                '建議水位': Math.round(totalScore) + '%'
+                '建議水位': Math.round(totalScore) + '%',
+                '持股市值': stockValue,
+                '現金餘額': cashValue
             };
             historyData.unshift(record);
             if (historyData.length > 100) historyData = historyData.slice(0, 100);
@@ -415,6 +425,8 @@
                     <td>${row.fed?.toFixed(1) || ''}</td>
                     <td><strong>${row['綜合分數']?.toFixed(1) || ''}</strong></td>
                     <td>${row['建議水位'] || ''}</td>
+                    <td>${row['持股市值'] != null ? 'NT$ ' + Number(row['持股市值']).toLocaleString() : ''}</td>
+                    <td>${row['現金餘額'] != null ? 'NT$ ' + Number(row['現金餘額']).toLocaleString() : ''}</td>
                 </tr>
             `).join('');
         }
@@ -467,7 +479,6 @@
             reader.readAsArrayBuffer(file);
         }
 
-        // 將目前狀態存到 localStorage
         function saveToStorage() {
             const payload = {
                 historyData,
@@ -483,7 +494,6 @@
             }
         }
 
-        // 從 localStorage 還原狀態
         function loadFromStorage() {
             try {
                 const raw = localStorage.getItem(STORAGE_KEY);
@@ -491,7 +501,7 @@
                 const data = JSON.parse(raw);
                 if (!data) return;
 
-                historyData = Array.isArray(data.historyData) ? data.historyData : [];
+                historyData   = Array.isArray(data.historyData) ? data.historyData : [];
                 currentValues = data.currentValues || {};
 
                 Object.entries(currentValues).forEach(([key, val]) => {
